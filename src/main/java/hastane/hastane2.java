@@ -9,14 +9,9 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.Vector;
-import java.text.MessageFormat; 
+import java.text.MessageFormat;
+import java.util.Optional;
 
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
@@ -42,6 +37,7 @@ public class hastane2 extends JFrame {
     
     // Veritabanı bağlantı adresi
     private static final String DB_URL = "jdbc:sqlite:hastane.db";
+    private final HastaDeposu depo = new HastaDeposu(DB_URL);
 
     private JTextField txtTcNo;
     private JTextField txtAdSoyad;
@@ -234,7 +230,7 @@ public class hastane2 extends JFrame {
         contentPane.add(txtArama);
         
         JButton btnYazdir = new JButton("YAZDIR / PDF");
-        btnYazdir.setBounds(570, 15, 120, 30); 
+        btnYazdir.setBounds(570, 15, 150, 30); 
         btnYazdir.setBackground(new Color(243, 156, 18)); 
         btnYazdir.setForeground(Color.WHITE);
         btnYazdir.setOpaque(true); btnYazdir.setBorderPainted(false);
@@ -306,185 +302,95 @@ public class hastane2 extends JFrame {
         verileriGetir("");
     }
 
-    private Connection baglantiAc() throws SQLException {
-        return DriverManager.getConnection(DB_URL);
-    }
-
     private void veritabaniKurulumu() {
-        // UNIQUE Kuralı: Aynı TC No'ya sahip ikinci kayıt eklenemez.
-        String sql = "CREATE TABLE IF NOT EXISTS hastalar (" +
-                     "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
-                     "tc_no TEXT UNIQUE, " + 
-                     "ad_soyad TEXT, telefon TEXT, " +
-                     "cinsiyet TEXT, poliklinik TEXT, sikayet TEXT, sehir TEXT, " + 
-                     "kayit_tarihi TEXT DEFAULT CURRENT_TIMESTAMP)";
-        try (Connection conn = baglantiAc(); Statement stmt = conn.createStatement()) {
-            stmt.execute(sql);
+        try {
+            depo.kurulum();
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Veritabanı hatası: " + e.getMessage());
         }
     }
 
-    // !!! BURASI GÜNCELLENDİ: ARTIK HEM İSME HEM TC'YE BAKIYOR !!!
+    // Arama hem isme hem TC'ye bakar
     private void verileriGetir(String arama) {
         model.setRowCount(0);
-        try (Connection conn = baglantiAc()) {
-            // "OR tc_no LIKE ?" eklendi
-            String sql = "SELECT * FROM hastalar WHERE ad_soyad LIKE ? OR tc_no LIKE ?";
-            
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setString(1, "%" + arama + "%"); // İsim için
-            ps.setString(2, "%" + arama + "%"); // TC için
-            
-            ResultSet rs = ps.executeQuery();
-            while (rs.next()) {
-                Vector<Object> v = new Vector<>();
-                v.add(rs.getInt("id"));
-                v.add(rs.getString("tc_no"));
-                v.add(rs.getString("ad_soyad"));
-                v.add(rs.getString("telefon"));
-                v.add(rs.getString("cinsiyet")); 
-                v.add(rs.getString("poliklinik"));
-                v.add(rs.getString("sikayet"));
-                v.add(rs.getString("sehir"));
-                model.addRow(v);
+        try {
+            for (Hasta h : depo.ara(arama)) {
+                model.addRow(new Object[] { h.id(), h.tcNo(), h.adSoyad(), h.telefon(), h.cinsiyet(),
+                        h.poliklinik(), h.sikayet(), h.sehir() });
             }
-        } catch (Exception e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Veritabanı hatası: " + e.getMessage());
+        }
+    }
+
+    /** Formdaki değerlerden bir hasta kaydı oluşturur. */
+    private Hasta formdanHasta(int id) {
+        String cinsiyet = rbKadin.isSelected() ? "Kadın" : rbErkek.isSelected() ? "Erkek" : "";
+        return new Hasta(id, txtTcNo.getText(), txtAdSoyad.getText(), txtTelefon.getText(), cinsiyet,
+                cmbPoliklinik.getSelectedItem().toString(), txtSikayet.getText(),
+                cmbSehir.getSelectedItem().toString());
+    }
+
+    /** Kurala uymayan alan varsa uyarı gösterir ve false döner. */
+    private boolean gecerliMi(Hasta hasta) {
+        Optional<String> hata = HastaDogrulama.dogrula(hasta);
+        hata.ifPresent(mesaj -> JOptionPane.showMessageDialog(this, mesaj));
+        return hata.isEmpty();
     }
 
     private void ekle() {
-        // --- KONTROL (VALIDATION) BÖLÜMÜ ---
-        
-        // 1. TC Kontrolü
-        String tc = txtTcNo.getText().trim();
-        if (tc.length() != 11) {
-            JOptionPane.showMessageDialog(this, "HATA: TC Kimlik Numarası eksik! Tam 11 hane olmalıdır.");
-            return; 
-        }
-
-        // 2. İsim Kontrolü
-        if (txtAdSoyad.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "HATA: Ad Soyad alanı boş bırakılamaz!");
+        Hasta hasta = formdanHasta(0);
+        if (!gecerliMi(hasta)) {
             return;
         }
-
-        // 3. Telefon Kontrolü
-        if (txtTelefon.getText().trim().length() < 10) {
-            JOptionPane.showMessageDialog(this, "HATA: Lütfen geçerli bir telefon numarası giriniz.");
-            return;
-        }
-
-        // 4. Cinsiyet Kontrolü
-        String cinsiyet = "";
-        if(rbKadin.isSelected()) cinsiyet = "Kadın";
-        else if(rbErkek.isSelected()) cinsiyet = "Erkek";
-        else { 
-            JOptionPane.showMessageDialog(this, "HATA: Lütfen cinsiyet seçiniz!"); 
-            return; 
-        }
-
-        // --- VERİTABANI İŞLEMİ ---
-        try (Connection conn = baglantiAc()) {
-            String sql = "INSERT INTO hastalar (tc_no, ad_soyad, telefon, cinsiyet, poliklinik, sikayet, sehir) VALUES (?,?,?,?,?,?,?)";
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setString(1, tc);
-            ps.setString(2, txtAdSoyad.getText().trim());
-            ps.setString(3, txtTelefon.getText().trim());
-            ps.setString(4, cinsiyet); 
-            ps.setString(5, cmbPoliklinik.getSelectedItem().toString());
-            ps.setString(6, txtSikayet.getText());
-            ps.setString(7, cmbSehir.getSelectedItem().toString());
-            
-            ps.executeUpdate();
-            
-            verileriGetir(""); 
+        try {
+            depo.ekle(hasta);
+            verileriGetir("");
             formuTemizle();
             JOptionPane.showMessageDialog(this, "Hasta Başarıyla Eklendi!");
-            
+        } catch (HastaDeposu.TcZatenKayitliException e) {
+            JOptionPane.showMessageDialog(this,
+                    "HATA: Bu TC Kimlik Numarası (" + hasta.tcNo().trim() + ") sistemde zaten kayıtlı!");
         } catch (SQLException e) {
-            // Aynı TC varsa yakala ve uyar
-            if(e.getMessage().contains("UNIQUE") || e.getMessage().contains("tc_no")) {
-                JOptionPane.showMessageDialog(this, "HATA: Bu TC Kimlik Numarası (" + txtTcNo.getText() + ") sistemde zaten kayıtlı!");
-            } else {
-                JOptionPane.showMessageDialog(this, "Veritabanı Hatası: " + e.getMessage());
-            }
-        } catch (Exception e) { 
-            JOptionPane.showMessageDialog(this, "Hata: " + e.getMessage()); 
+            JOptionPane.showMessageDialog(this, "Veritabanı Hatası: " + e.getMessage());
         }
     }
 
     private void guncelle() {
-        if(seciliId == -1) {
+        if (seciliId == -1) {
             JOptionPane.showMessageDialog(this, "Lütfen tablodan güncellenecek kişiyi seçiniz.");
             return;
         }
-
-        // --- KONTROL (VALIDATION) BÖLÜMÜ ---
-        
-        String tc = txtTcNo.getText().trim();
-        if (tc.length() != 11) {
-            JOptionPane.showMessageDialog(this, "HATA: TC Kimlik Numarası 11 hane olmalıdır.");
+        Hasta hasta = formdanHasta(seciliId);
+        if (!gecerliMi(hasta)) {
             return;
         }
-
-        if (txtAdSoyad.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "HATA: Ad Soyad alanı boş bırakılamaz!");
-            return;
-        }
-        
-        if (txtTelefon.getText().trim().length() < 10) {
-            JOptionPane.showMessageDialog(this, "HATA: Geçerli bir telefon numarası giriniz.");
-            return;
-        }
-
-        String cinsiyet = "";
-        if(rbKadin.isSelected()) cinsiyet = "Kadın";
-        else if(rbErkek.isSelected()) cinsiyet = "Erkek";
-        else {
-             JOptionPane.showMessageDialog(this, "Lütfen cinsiyet seçimi yapınız.");
-             return;
-        }
-            
-        // --- VERİTABANI GÜNCELLEME ---
-        try (Connection conn = baglantiAc()) {
-            String sql = "UPDATE hastalar SET tc_no=?, ad_soyad=?, telefon=?, cinsiyet=?, poliklinik=?, sikayet=?, sehir=? WHERE id=?";
-            PreparedStatement ps = conn.prepareStatement(sql);
-            ps.setString(1, tc);
-            ps.setString(2, txtAdSoyad.getText().trim());
-            ps.setString(3, txtTelefon.getText().trim());
-            ps.setString(4, cinsiyet);
-            ps.setString(5, cmbPoliklinik.getSelectedItem().toString());
-            ps.setString(6, txtSikayet.getText());
-            ps.setString(7, cmbSehir.getSelectedItem().toString());
-            ps.setInt(8, seciliId);
-            
-            ps.executeUpdate();
-            verileriGetir(""); 
+        try {
+            depo.guncelle(hasta);
+            verileriGetir("");
             formuTemizle();
             JOptionPane.showMessageDialog(this, "Kayıt Başarıyla Güncellendi!");
-            
+        } catch (HastaDeposu.TcZatenKayitliException e) {
+            JOptionPane.showMessageDialog(this,
+                    "HATA: Bu TC Kimlik Numarası başka bir hastada kayıtlı! Değişiklik yapılamadı.");
         } catch (SQLException e) {
-            // Başkasının TC'sini yazmaya çalışırsa engelle
-            if(e.getMessage().contains("UNIQUE") || e.getMessage().contains("tc_no")) {
-                JOptionPane.showMessageDialog(this, "HATA: Bu TC Kimlik Numarası başka bir hastada kayıtlı! Değişiklik yapılamadı.");
-            } else {
-                JOptionPane.showMessageDialog(this, "Hata: " + e.getMessage());
-            }
-        } catch (Exception e) { JOptionPane.showMessageDialog(this, "Hata: " + e.getMessage()); }
+            JOptionPane.showMessageDialog(this, "Hata: " + e.getMessage());
+        }
     }
 
     private void sil() {
-        if(seciliId == -1) {
+        if (seciliId == -1) {
             JOptionPane.showMessageDialog(this, "Lütfen silinecek kişiyi seçiniz.");
             return;
         }
-        if(JOptionPane.showConfirmDialog(this, "Kayıt Silinsin mi?", "Onay", JOptionPane.YES_NO_OPTION) == 0) {
-            try (Connection conn = baglantiAc()) {
-                PreparedStatement ps = conn.prepareStatement("DELETE FROM hastalar WHERE id=?");
-                ps.setInt(1, seciliId);
-                ps.executeUpdate();
-                verileriGetir(""); formuTemizle();
-            } catch (Exception e) { JOptionPane.showMessageDialog(this, "Hata: " + e.getMessage()); }
+        if (JOptionPane.showConfirmDialog(this, "Kayıt Silinsin mi?", "Onay", JOptionPane.YES_NO_OPTION) == 0) {
+            try {
+                depo.sil(seciliId);
+                verileriGetir("");
+                formuTemizle();
+            } catch (SQLException e) {
+                JOptionPane.showMessageDialog(this, "Hata: " + e.getMessage());
+            }
         }
     }
 

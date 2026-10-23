@@ -1,0 +1,14 @@
+# Maven
+target/
+
+# Uygulamanın oluşturduğu yerel veritabanı (kişisel veri içerebilir)
+*.db
+
+# IDE ve işletim sistemi
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+bin/
+.DS_Store
