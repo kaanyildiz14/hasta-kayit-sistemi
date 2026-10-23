@@ -13,6 +13,7 @@ Bir hastanenin hasta kabul biriminde kullanılabilecek masaüstü kayıt uygulam
 
 ## ✨ Özellikler
 
+- **Modern arayüz:** Başlık ve canlı kayıt sayısı, form kartı, satırları dönüşümlü renkli tablo, alan ipuçları
 - **Hasta kaydı:** TC Kimlik No, ad soyad, telefon, cinsiyet, şehir (81 il), poliklinik ve şikayet
 - **Kayıt yönetimi:** Tablodan seçilen hastayı forma doldurma, güncelleme, silme (onaylı)
 - **Anlık arama:** Yazdıkça isim ya da TC numarasına göre filtreleme
@@ -27,7 +28,7 @@ Bir hastanenin hasta kabul biriminde kullanılabilecek masaüstü kayıt uygulam
 
 | Katman | Teknoloji |
 |---|---|
-| Arayüz | Java Swing |
+| Arayüz | Java Swing + [FlatLaf](https://www.formdev.com/flatlaf/) (modern tema) + Inter yazı tipi |
 | Veritabanı | SQLite (`sqlite-jdbc`) |
 | Derleme | Maven (wrapper ile, kurulum gerektirmez) |
 | Test | JUnit 6, her push'ta GitHub Actions |
@@ -57,7 +58,7 @@ java -jar target/hasta-kayit-sistemi.jar
 
 ```
 src/main/java/hastane/
-├── hastane2.java        # Swing arayüzü: form, tablo, butonlar
+├── hastane2.java        # Swing arayüzü ve tema: form kartı, tablo, arama
 ├── Hasta.java           # Hasta kaydı (record)
 ├── HastaDogrulama.java  # Form doğrulama kuralları
 └── HastaDeposu.java     # SQLite işlemleri (ekle, ara, güncelle, sil)

@@ -33,6 +33,17 @@
       <artifactId>sqlite-jdbc</artifactId>
       <version>3.53.4.0</version>
     </dependency>
+    <!-- Modern görünüm (IntelliJ IDEA'nın da kullandığı tema) ve her sistemde aynı yazı tipi -->
+    <dependency>
+      <groupId>com.formdev</groupId>
+      <artifactId>flatlaf</artifactId>
+      <version>3.7.2</version>
+    </dependency>
+    <dependency>
+      <groupId>com.formdev</groupId>
+      <artifactId>flatlaf-fonts-inter</artifactId>
+      <version>4.1</version>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
