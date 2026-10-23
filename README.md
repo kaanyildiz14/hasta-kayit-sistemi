@@ -37,6 +37,10 @@ Bir hastanenin hasta kabul biriminde kullanılabilecek masaüstü kayıt uygulam
 
 Gereksinim: Java 17 veya üstü
 
+**Hızlı yol:** [Releases](https://github.com/kaanyildiz14/hasta-kayit-sistemi/releases/latest) sayfasından `hasta-kayit-sistemi.jar` dosyasını indirip çift tıklayın ya da `java -jar hasta-kayit-sistemi.jar` ile çalıştırın.
+
+**Kaynaktan derleme:**
+
 ```bash
 git clone https://github.com/kaanyildiz14/hasta-kayit-sistemi.git
 cd hasta-kayit-sistemi
